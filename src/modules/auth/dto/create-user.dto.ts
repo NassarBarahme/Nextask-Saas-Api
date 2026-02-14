@@ -9,7 +9,7 @@ import {
 export class CreateUserDto {
   @IsString({ message: 'Name must be a string' })
   @IsNotEmpty({ message: 'Name is required' })
-  @MinLength(2, { message: 'Name must be at least  characters long' })
+  @MinLength(2, { message: 'Name must be at least 2 characters long' })
   name!: string;
 
   @IsEmail({}, { message: 'Email is invalid' })

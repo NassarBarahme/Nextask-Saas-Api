@@ -2,13 +2,20 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, User, Organization, Membership } from 'src/generated/prisma/client';
+import {
+  Prisma,
+  User,
+  Organization,
+  Membership,
+} from 'src/generated/prisma/client';
 import { PrismaService } from 'src/modules/prisma/prisma.service';
 import { OrgType, Role } from 'src/generated/prisma/enums';
+import { generateSlug, generateUniqueSlug } from 'src/common/utils/slug.util';
 
-type UserWithMemberships = Prisma.UserGetPayload<{
+export type UserWithMemberships = Prisma.UserGetPayload<{
   include: {
     memberships: {
       include: {
@@ -38,45 +45,11 @@ const USER_WITH_MEMBERSHIPS_INCLUDE = {
 
 @Injectable()
 export class AuthRepository {
+  private readonly logger = new Logger(AuthRepository.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
-  async createUser(
-    name: string,
-    email: string,
-    hashedPassword: string,
-  ): Promise<User> {
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      throw new BadRequestException('Email already in use');
-    }
-
-    try {
-      return await this.prisma.user.create({
-        data: {
-          name,
-          email,
-          password: hashedPassword,
-        },
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          const field = error.meta?.target as string[];
-          if (field?.includes('email')) {
-            throw new BadRequestException('Email already in use');
-          }
-          if (field?.includes('phone')) {
-            throw new BadRequestException('Phone number already in use');
-          }
-        }
-      }
-
-      throw new InternalServerErrorException('Failed to create user');
-    }
-  }
+  // --- ميثودات الـ User الأساسية ---
 
   async findUserByEmail(email: string): Promise<UserWithMemberships | null> {
     return this.prisma.user.findUnique({
@@ -118,60 +91,68 @@ export class AuthRepository {
     }
   }
 
-  async userExistsByEmail(email: string): Promise<boolean> {
-    const user = await this.prisma.user.findUnique({
+  // --- ميثودات الـ OTP والباسورد (للحسابات الموثقة فعلياً) ---
+
+  async updateOtpCode(userId: string, otpCode: string, expires: Date) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        otpCode,
+        otpExpires: expires,
+      },
+    });
+  }
+
+  async updatePasswordAndClearOtp(userId: string, hashedPassword: string) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+        otpCode: null,
+        otpExpires: null,
+      },
+    });
+  }
+
+  // --- نظام الـ PendingUser (فلترة الإيميلات الوهمية) ---
+
+  // 1. إضافة await قبل this.prisma
+  async createPendingUser(data: {
+    email: string;
+    name: string;
+    password: string;
+    otpCode: string;
+    expiresAt: Date;
+  }) {
+    return await this.prisma.pendingUser.upsert({
+      where: { email: data.email },
+      update: data,
+      create: data,
+    });
+  }
+
+  // 2. إضافة await
+  async findPendingUser(email: string) {
+    return await this.prisma.pendingUser.findUnique({
       where: { email },
-      select: { id: true },
     });
-    return user !== null;
   }
 
-  async userExistsByPhone(phone: string): Promise<boolean> {
-    const user = await this.prisma.user.findUnique({
-      where: { phone },
-      select: { id: true },
-    });
-    return user !== null;
-  }
-
-  /**
-   * Generates a URL-friendly slug from a string
-   */
-  private generateSlug(name: string): string {
-    return name
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, '') // Remove special characters
-      .replace(/[\s_-]+/g, '-') // Replace spaces and underscores with hyphens
-      .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
-  }
-
-  /**
-   * Generates a unique slug by appending a suffix if needed
-   */
-  private async generateUniqueSlug(baseSlug: string): Promise<string> {
-    let slug = baseSlug;
-    let counter = 1;
-
-    while (true) {
-      const existing = await this.prisma.organization.findUnique({
-        where: { slug },
-        select: { id: true },
+  async deletePendingUser(email: string) {
+    try {
+      return await this.prisma.pendingUser.delete({
+        where: { email },
       });
-
-      if (!existing) {
-        return slug;
-      }
-
-      slug = `${baseSlug}-${counter}`;
-      counter++;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to delete PendingUser for email "${email}": ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
     }
   }
 
-  /**
-   * Creates a user with their default organization and membership in a single transaction.
-   * This follows SaaS best practices for onboarding.
-   */
+  // --- ميثودات الإنشاء المعقدة (Transaction) ---
+
   async createUserWithOrganization(
     name: string,
     email: string,
@@ -181,44 +162,39 @@ export class AuthRepository {
     organization: Organization;
     membership: Membership;
   }> {
-    // Check if user already exists
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email },
+    const orgName = name ? `${name}'s Org` : `User's Org`;
+    const baseSlug = generateSlug(orgName);
+    const uniqueSlug = await generateUniqueSlug(baseSlug, async (slug) => {
+      const existing = await this.prisma.organization.findUnique({
+        where: { slug },
+        select: { id: true },
+      });
+      return !!existing;
     });
 
-    if (existingUser) {
-      throw new BadRequestException('Email already in use');
-    }
-
-    // Generate organization name and slug
-    const orgName = name ? `${name}'s Org` : `User's Org`;
-    const baseSlug = this.generateSlug(orgName);
-    const uniqueSlug = await this.generateUniqueSlug(baseSlug);
-
     try {
-      // Use transaction to ensure atomicity
-      const result = await this.prisma.$transaction(async (tx) => {
-        // 1. Create the user
+      return await this.prisma.$transaction(async (tx) => {
+        // 1. إنشاء المستخدم الحقيقي (لأنه عدى مرحلة الـ OTP)
         const user = await tx.user.create({
           data: {
             name,
             email,
             password: hashedPassword,
+            isVerified: true, // الحساب صار موثق فور الإنشاء هنا
           },
         });
 
-        // 2. Create the default organization
+        // 2. إنشاء المنظمة
         const organization = await tx.organization.create({
           data: {
             name: orgName,
             slug: uniqueSlug,
-            type: OrgType.RETAIL, // Default to RETAIL
-            metadata: {},
+            type: OrgType.RETAIL,
             isActive: true,
           },
         });
 
-        // 3. Create the membership with OWNER role
+        // 3. إنشاء العضوية (Owner)
         const membership = await tx.membership.create({
           data: {
             userId: user.id,
@@ -227,7 +203,7 @@ export class AuthRepository {
           },
         });
 
-        // 4. Update user's activeOrganizationId
+        // 4. تعيين المنظمة النشطة
         const updatedUser = await tx.user.update({
           where: { id: user.id },
           data: { activeOrganizationId: organization.id },
@@ -235,23 +211,15 @@ export class AuthRepository {
 
         return { user: updatedUser, organization, membership };
       });
-
-      return result;
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          const field = error.meta?.target as string[];
-          if (field?.includes('email')) {
-            throw new BadRequestException('Email already in use');
-          }
-          if (field?.includes('slug')) {
-            throw new BadRequestException('Organization slug conflict');
-          }
-        }
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException('Email or Slug already in use');
       }
-
       throw new InternalServerErrorException(
-        'Failed to create user with organization',
+        'Critical error during user creation',
       );
     }
   }

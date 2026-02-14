@@ -7,6 +7,22 @@ CREATE TYPE "OrderStatus" AS ENUM ('PENDING', 'CONFIRMED', 'PROCESSING', 'OUT_FO
 -- CreateEnum
 CREATE TYPE "PaymentStatus" AS ENUM ('UNPAID', 'PARTIAL', 'PAID', 'REFUNDED');
 
+-- CreateEnum
+CREATE TYPE "Role" AS ENUM ('OWNER', 'ADMIN', 'MANAGER', 'MEMBER');
+
+-- CreateTable
+CREATE TABLE "PendingUser" (
+    "id" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "password" TEXT NOT NULL,
+    "otpCode" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PendingUser_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -15,8 +31,13 @@ CREATE TABLE "User" (
     "name" TEXT,
     "phone" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "activeOrganizationId" TEXT,
+    "refreshToken" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "otpCode" TEXT,
+    "otpExpires" TIMESTAMP(3),
+    "isVerified" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -38,7 +59,7 @@ CREATE TABLE "Organization" (
 -- CreateTable
 CREATE TABLE "Membership" (
     "id" TEXT NOT NULL,
-    "role" TEXT NOT NULL DEFAULT 'MEMBER',
+    "role" "Role" NOT NULL DEFAULT 'MEMBER',
     "userId" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
 
@@ -96,6 +117,9 @@ CREATE TABLE "OrderItem" (
 
     CONSTRAINT "OrderItem_pkey" PRIMARY KEY ("id")
 );
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PendingUser_email_key" ON "PendingUser"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");

@@ -6,6 +6,15 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+model PendingUser {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String   // الباسورد المشفر
+  otpCode   String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
 
 model User {
   id          String       @id @default(uuid())
@@ -19,6 +28,9 @@ model User {
   memberships Membership[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+otpCode           String?
+  otpExpires        DateTime?
+  isVerified Boolean  @default(false)
 }
 
 model Organization {
@@ -57,7 +69,7 @@ model Item {
   sku            String?
   barcode        String?
   stock          Int          @default(0)
-  unit           String       @default("piece") 
+  unit           String       @default("piece")
   attributes     Json?        @default("{}")
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -130,8 +142,8 @@ enum PaymentStatus {
 }
 
 enum Role {
-  OWNER      
-  ADMIN         
-  MANAGER      
-  MEMBER        
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
 }
