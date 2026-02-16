@@ -13,7 +13,6 @@ import { TokenService } from './token/token.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { MailService } from '../mail/mail.service';
-import { PendingUserRecord } from './auth.types';
 import {
   OTP_VERIFICATION_EXPIRY_MS,
   OTP_PASSWORD_RESET_EXPIRY_MS,
@@ -30,7 +29,18 @@ export class AuthService {
     private mailService: MailService,
   ) {}
 
-  /** العضوية النشطة أو الأولى للمستخدم */
+  getVerificationBaseUrl(): { verificationBaseUrl: string } {
+    return { verificationBaseUrl: this.mailService.getPublicBaseUrl() };
+  }
+
+  /** Test email sending (debug only). Returns success or throws with real SMTP error. */
+  testSendVerificationEmail(
+    email: string,
+  ): Promise<{ ok: true; message: string }> {
+    return this.mailService.testSendVerificationEmail(email);
+  }
+
+  /** Active or first membership for the user */
   private getCurrentMembership(
     user: UserWithMemberships,
   ): MembershipItem | undefined {
@@ -64,7 +74,7 @@ export class AuthService {
   async signup(createUserDto: CreateUserDto) {
     const { email, name, password } = createUserDto;
 
-    // 0. فحص أن الإيميل حقيقي (نطاق يقبل البريد + مش إيميل مؤقت) — قبل لمس الداتابيز
+    // 0. Validate real email (domain accepts mail, not disposable)
     const emailCheck = await validateRealEmail(email);
     if (!emailCheck.valid) {
       throw new BadRequestException(
@@ -72,53 +82,50 @@ export class AuthService {
       );
     }
 
-    // 1. تأكد إن الإيميل مش موجود أصلاً في جدول الـ User الحقيقي
+    // 1. Ensure email is not already registered
     const existingUser = await this.authRepository.findUserByEmail(email);
     if (existingUser) throw new BadRequestException('Email already registered');
 
-    // 2. تشفير الباسورد وتوليد الكود
+    // 2. Hash password and generate verification OTP
     const hashedPassword = await bcrypt.hash(password, 10);
     const otpCode = Math.floor(10000000 + Math.random() * 90000000).toString();
-    const expiresAt = new Date(Date.now() + OTP_VERIFICATION_EXPIRY_MS);
+    const otpExpires = new Date(Date.now() + OTP_VERIFICATION_EXPIRY_MS);
 
-    // 3. تخزين في الجدول المؤقت (عن طريق الريبوزيتوري)
-    await this.authRepository.createPendingUser({
+    // 3. Create user in DB (unverified until email link is clicked)
+    await this.authRepository.createUnverifiedUser({
       email,
       name,
       password: hashedPassword,
       otpCode,
-      expiresAt,
+      otpExpires,
     });
 
-    // 4. إرسال الإيميل
+    // 4. Send verification email
     await this.mailService.sendVerificationEmail(email, otpCode);
 
     return { message: 'Please check your email to verify your account.' };
   }
 
-  /**
-   * إعادة إرسال إيميل التفعيل لمن كان في PendingUser (رابط جديد بنفس الإيميل).
-   */
+  /** Resend verification email for unverified user */
   async resendVerificationEmail(email: string) {
-    const existingUser = await this.authRepository.findUserByEmail(email);
-    if (existingUser) {
-      throw new BadRequestException('Account already verified. You can sign in.');
-    }
-    const pending = await this.authRepository.findPendingUser(email);
-    if (!pending) {
+    const user = await this.authRepository.findUserByEmail(email);
+    if (!user) {
       throw new BadRequestException(
-        'No pending registration for this email. Please sign up first.',
+        'No account found for this email. Please sign up first.',
+      );
+    }
+    if (user.isVerified) {
+      throw new BadRequestException(
+        'Account already verified. You can sign in.',
       );
     }
     const otpCode = Math.floor(10000000 + Math.random() * 90000000).toString();
-    const expiresAt = new Date(Date.now() + OTP_VERIFICATION_EXPIRY_MS);
-    await this.authRepository.createPendingUser({
-      email: pending.email,
-      name: pending.name,
-      password: pending.password,
+    const otpExpires = new Date(Date.now() + OTP_VERIFICATION_EXPIRY_MS);
+    await this.authRepository.updateVerificationOtp(
+      user.id,
       otpCode,
-      expiresAt,
-    });
+      otpExpires,
+    );
     await this.mailService.sendVerificationEmail(email, otpCode);
     return {
       message:
@@ -126,75 +133,66 @@ export class AuthService {
     };
   }
 
-  /**
-   * تفعيل الحساب: الأهم — نقل من الجدول المؤقت (الفيك) → الجدول الحقيقي، ثم حذف من المؤقت.
-   */
+  /** Verify account: check OTP then create org/membership and set isVerified = true */
   async verifyEmail(email: string, otpCode: string) {
-    const pendingUser = await this.authRepository.findPendingUser(email);
-    if (!pendingUser) {
-      throw new UnauthorizedException('طلب التفعيل غير موجود أو انتهت صلاحيته');
-    }
-
-    const tempUser = pendingUser as unknown as PendingUserRecord;
-
-    if (new Date() > new Date(tempUser.expiresAt)) {
+    const user = await this.authRepository.findUserByEmail(email);
+    if (!user) {
       throw new UnauthorizedException(
-        'انتهت صلاحية رابط التفعيل. يرجى التسجيل من جديد.',
+        'Verification request not found or expired',
       );
     }
-    if (tempUser.otpCode !== otpCode) {
-      throw new UnauthorizedException('كود التفعيل غير صحيح');
+    if (user.isVerified) {
+      return {
+        success: true,
+        message: 'Account already verified. You can sign in.',
+      };
     }
 
-    // 1) نقل البيانات للجدول الحقيقي (User + Organization + Membership)
-    await this.authRepository.createUserWithOrganization(
-      tempUser.name,
-      tempUser.email,
-      tempUser.password,
-    );
+    const dbOtp = String(user.otpCode ?? '').trim();
+    const inputOtp = String(otpCode ?? '').trim();
+    if (dbOtp !== inputOtp) {
+      throw new UnauthorizedException('Invalid verification code');
+    }
+    if (user.otpExpires && new Date() > new Date(user.otpExpires)) {
+      throw new UnauthorizedException(
+        'Verification link expired. Use resend verification or sign up again.',
+      );
+    }
 
-    // 2) حذف من الجدول المؤقت
-    await this.authRepository.deletePendingUser(email);
+    if (user.memberships?.length) {
+      await this.authRepository.setUserVerifiedAndClearOtp(user.id);
+      return {
+        success: true,
+        message: 'Your account has been verified. You can sign in now.',
+      };
+    }
+
+    await this.authRepository.createOrganizationAndMembershipForUser(
+      user.id,
+      user.name ?? '',
+    );
 
     return {
       success: true,
-      message:
-        'تم تفعيل حسابك بنجاح ونقله للجدول الحقيقي! يمكنك تسجيل الدخول الآن.',
+      message: 'Your account has been verified. You can sign in now.',
     };
   }
   async signin(signinDto: SigninDto) {
     const { email, password } = signinDto;
-    let user = await this.authRepository.findUserByEmail(email);
+    const user = await this.authRepository.findUserByEmail(email);
 
     if (!user) {
-      const pending = await this.authRepository.findPendingUser(email);
-      if (pending) {
-        const tempUser = pending as unknown as PendingUserRecord;
-        const passwordValid = await bcrypt.compare(password, tempUser.password);
-        if (!passwordValid) {
-          throw new UnauthorizedException('Invalid credentials');
-        }
-        if (new Date() > new Date(tempUser.expiresAt)) {
-          throw new UnauthorizedException(
-            'Verification link expired. Use resend-verification or sign up again.',
-          );
-        }
-        await this.authRepository.createUserWithOrganization(
-          tempUser.name,
-          tempUser.email,
-          tempUser.password,
-        );
-        await this.authRepository.deletePendingUser(email);
-        user = await this.authRepository.findUserByEmail(email);
-        if (!user) throw new UnauthorizedException('Invalid credentials');
-      } else {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-    } else {
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      if (!isPasswordValid) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    if (!user.isVerified) {
+      throw new UnauthorizedException(
+        'Account not verified. Check your email and click the verification link.',
+      );
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
     }
 
     if (!user.memberships || user.memberships.length === 0) {
@@ -225,6 +223,12 @@ export class AuthService {
       accessToken,
       refreshToken,
     );
+  }
+
+  /** Refresh using token from body. Use POST /auth/refresh with body: { "refreshToken": "..." }. */
+  async refreshWithBody(refreshToken: string) {
+    const payload = await this.tokenService.verifyRefreshToken(refreshToken);
+    return this.refreshTokens(String(payload.sub), refreshToken);
   }
 
   async refreshTokens(userId: string, refreshToken: string) {
@@ -276,7 +280,13 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
-  // 1. طلب كود جديد - كود نظيف جداً
+  /** Logout using access token from body. POST /auth/logout with body: { "accessToken": "..." }. */
+  async logoutWithBody(accessToken: string) {
+    const payload = await this.tokenService.verifyAccessToken(accessToken);
+    return this.logout(payload.sub);
+  }
+
+  // 1. Request new OTP
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto) {
     const { email } = forgotPasswordDto;
     const user = await this.authRepository.findUserByEmail(email);
@@ -292,13 +302,13 @@ export class AuthService {
 
     await this.authRepository.updateOtpCode(user.id, otpCode, expires);
 
-    // نداء خدمة الإيميل بشكل مستقل
+    // Send email
     await this.mailService.sendForgotPasswordEmail(user.email, otpCode);
 
     return response;
   }
 
-  // 2. التحقق وتغيير الباسورد
+  // 2. Verify OTP and update password
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
     const { email, otpCode, newPassword } = resetPasswordDto;
     const user = await this.authRepository.findUserByEmail(email);

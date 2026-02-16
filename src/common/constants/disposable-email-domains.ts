@@ -1,6 +1,5 @@
 /**
- * نطاقات إيميلات مؤقتة/وهمية — التسجيل مرفوض لهذه النطاقات
- * يقلل الضغط على جدول PendingUser ويمنع الإيميلات الوهمية
+ * Disposable/temporary email domains — signup rejected for these
  */
 export const DISPOSABLE_EMAIL_DOMAINS = new Set([
   '10minutemail.com',

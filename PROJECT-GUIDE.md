@@ -78,7 +78,7 @@
   - **POST /auth/resend-verification** — عام. Body: ResendVerificationDto. يستدعي `authService.resendVerificationEmail()`.
   - **POST /auth/forgot-password** — عام. Body: ForgotPasswordDto. يستدعي `authService.forgotPassword()`.
   - **POST /auth/reset-password** — عام. Body: ResetPasswordDto. يستدعي `authService.resetPassword()`.
-  - **GET /auth/verify-email** — عام (ومسموح من الـ Guard حتى بدون توكن). Query: VerifyEmailQueryDto. يستدعي `authService.verifyEmail()` ثم إن وُجد `VERIFY_SUCCESS_REDIRECT_URL` يعمل redirect، وإلا يرجع JSON.
+  - **GET /auth/verify-email** — عام. Query: email, otpCode. يفعّل الحساب ويرجع صفحة HTML (نجاح أو خطأ). لا توجيه لفرونتند.
 - **الترابط:** يعتمد على AuthService و ConfigService فقط؛ لا يتعامل مع الداتابيز أو الإيميل مباشرة.
 
 ### `src/modules/auth/auth.service.ts`

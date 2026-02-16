@@ -2,20 +2,20 @@ import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { AuthRepository } from './auth.repository';
+import { UnverifiedUsersCleaner } from './unverified-users.cleaner';
 import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { TokenService } from './token/token.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AccessTokenStrategy } from './strategies/access-token.strategy';
 import { RefreshTokenStrategy } from './strategies/refresh-token.strategy';
-import { MailModule } from '../mail/mail.module'; // استيراد الموديول الجديد
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
     PrismaModule,
     ConfigModule,
-    MailModule, // أضفناه هون عشان الـ AuthService يقدر يستخدم MailService
-    // إعدادات الـ JWT
+    MailModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService): JwtModuleOptions => {
@@ -33,6 +33,7 @@ import { MailModule } from '../mail/mail.module'; // استيراد المودي
   providers: [
     AuthService,
     AuthRepository,
+    UnverifiedUsersCleaner,
     TokenService,
     AccessTokenStrategy,
     RefreshTokenStrategy,

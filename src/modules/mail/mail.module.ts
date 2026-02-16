@@ -1,32 +1,32 @@
 import { Module } from '@nestjs/common';
 import { MailService } from './mail.service';
-import { MailerModule } from '@nestjs-modules/mailer'; // تأكد من استيرادها
+import { MailerModule } from '@nestjs-modules/mailer';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
     ConfigModule,
-    // هذا الجزء هو اللي بيعرّف الـ MailerService
     MailerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        transport: {
-          host: 'smtp.gmail.com',
-          port: 465,
-          secure: true,
-          auth: {
-            user: config.get<string>('MAIL_USER'),
-            pass: config.get<string>('MAIL_PASS'),
+      useFactory: (config: ConfigService) => {
+        const user = config.get<string>('MAIL_USER') ?? '';
+        const pass = (config.get<string>('MAIL_PASS') ?? '').replace(/\s/g, '');
+        return {
+          transport: {
+            host: 'smtp.gmail.com',
+            port: 465,
+            secure: true,
+            auth: { user, pass },
           },
-        },
-        defaults: {
-          from: `"Nextask Support" <${config.get<string>('MAIL_USER')}>`,
-        },
-      }),
+          defaults: {
+            from: `"Nextask Support" <${user}>`,
+          },
+        };
+      },
     }),
   ],
   providers: [MailService],
-  exports: [MailService, MailerModule], // أضفنا MailerModule للاحتياط
+  exports: [MailService, MailerModule],
 })
 export class MailModule {}

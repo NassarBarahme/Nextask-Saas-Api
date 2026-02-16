@@ -1,6 +1,4 @@
-/**
- * تحويل نص لـ slug مناسب للـ URL (حروف صغيرة، شرطات، بدون رموز خاصة)
- */
+/** Convert text to URL-friendly slug */
 export function generateSlug(name: string): string {
   return name
     .toLowerCase()
@@ -10,11 +8,7 @@ export function generateSlug(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/**
- * إرجاع slug فريد بعد التحقق أن القيمة غير مستخدمة
- * @param baseSlug القيمة الأولية
- * @param existsFn دالة تتحقق إذا الـ slug مستخدم (ترجع true إذا موجود)
- */
+/** Return unique slug; existsFn(slug) returns true if slug is taken */
 export async function generateUniqueSlug(
   baseSlug: string,
   existsFn: (slug: string) => Promise<boolean>,

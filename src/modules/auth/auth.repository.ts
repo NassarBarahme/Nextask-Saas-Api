@@ -49,7 +49,7 @@ export class AuthRepository {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  // --- ميثودات الـ User الأساسية ---
+  // --- User ---
 
   async findUserByEmail(email: string): Promise<UserWithMemberships | null> {
     return this.prisma.user.findUnique({
@@ -91,7 +91,7 @@ export class AuthRepository {
     }
   }
 
-  // --- ميثودات الـ OTP والباسورد (للحسابات الموثقة فعلياً) ---
+  // --- OTP / password reset ---
 
   async updateOtpCode(userId: string, otpCode: string, expires: Date) {
     return this.prisma.user.update({
@@ -114,44 +114,100 @@ export class AuthRepository {
     });
   }
 
-  // --- نظام الـ PendingUser (فلترة الإيميلات الوهمية) ---
+  // --- Unverified user (signup) ---
 
-  // 1. إضافة await قبل this.prisma
-  async createPendingUser(data: {
+  async createUnverifiedUser(data: {
     email: string;
     name: string;
     password: string;
     otpCode: string;
-    expiresAt: Date;
+    otpExpires: Date;
   }) {
-    return await this.prisma.pendingUser.upsert({
-      where: { email: data.email },
-      update: data,
-      create: data,
+    return this.prisma.user.create({
+      data: {
+        email: data.email,
+        name: data.name,
+        password: data.password,
+        isVerified: false,
+        otpCode: data.otpCode,
+        otpExpires: data.otpExpires,
+      },
     });
   }
 
-  // 2. إضافة await
-  async findPendingUser(email: string) {
-    return await this.prisma.pendingUser.findUnique({
-      where: { email },
+  async updateVerificationOtp(userId: string, otpCode: string, otpExpires: Date) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { otpCode, otpExpires },
     });
   }
 
-  async deletePendingUser(email: string) {
-    try {
-      return await this.prisma.pendingUser.delete({
-        where: { email },
+  /** Set user verified and clear OTP */
+  async setUserVerifiedAndClearOtp(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { isVerified: true, otpCode: null, otpExpires: null },
+    });
+  }
+
+  /** Delete unverified users older than date (cleaner cron) */
+  async deleteUnverifiedUsersOlderThan(before: Date): Promise<number> {
+    const result = await this.prisma.user.deleteMany({
+      where: {
+        isVerified: false,
+        createdAt: { lt: before },
+      },
+    });
+    return result.count;
+  }
+
+  // --- Org + membership (verify-email) ---
+
+  /**
+   * Create org + membership + set isVerified in one transaction.
+   */
+  async createOrganizationAndMembershipForUser(
+    userId: string,
+    userName: string,
+  ): Promise<{ organization: Organization; membership: Membership }> {
+    const orgName = userName ? `${userName}'s Org` : `User's Org`;
+    const baseSlug = generateSlug(orgName);
+    const uniqueSlug = await generateUniqueSlug(baseSlug, async (slug) => {
+      const existing = await this.prisma.organization.findUnique({
+        where: { slug },
+        select: { id: true },
       });
-    } catch (error) {
-      this.logger.warn(
-        `Failed to delete PendingUser for email "${email}": ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return null;
-    }
-  }
+      return !!existing;
+    });
 
-  // --- ميثودات الإنشاء المعقدة (Transaction) ---
+    return this.prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.create({
+        data: {
+          name: orgName,
+          slug: uniqueSlug,
+          type: OrgType.RETAIL,
+          isActive: true,
+        },
+      });
+      const membership = await tx.membership.create({
+        data: {
+          userId,
+          organizationId: organization.id,
+          role: Role.OWNER,
+        },
+      });
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          activeOrganizationId: organization.id,
+          isVerified: true,
+          otpCode: null,
+          otpExpires: null,
+        },
+      });
+      return { organization, membership };
+    });
+  }
 
   async createUserWithOrganization(
     name: string,
@@ -174,17 +230,17 @@ export class AuthRepository {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // 1. إنشاء المستخدم الحقيقي (لأنه عدى مرحلة الـ OTP)
+        // 1. Create user
         const user = await tx.user.create({
           data: {
             name,
             email,
             password: hashedPassword,
-            isVerified: true, // الحساب صار موثق فور الإنشاء هنا
+            isVerified: true,
           },
         });
 
-        // 2. إنشاء المنظمة
+        // 2. Create org
         const organization = await tx.organization.create({
           data: {
             name: orgName,
@@ -194,7 +250,7 @@ export class AuthRepository {
           },
         });
 
-        // 3. إنشاء العضوية (Owner)
+        // 3. Create membership (Owner)
         const membership = await tx.membership.create({
           data: {
             userId: user.id,
@@ -203,7 +259,7 @@ export class AuthRepository {
           },
         });
 
-        // 4. تعيين المنظمة النشطة
+        // 4. Set active org
         const updatedUser = await tx.user.update({
           where: { id: user.id },
           data: { activeOrganizationId: organization.id },

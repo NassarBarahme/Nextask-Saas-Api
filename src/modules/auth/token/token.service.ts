@@ -11,18 +11,41 @@ export class TokenService {
   ) {}
 
   async generateAccessToken(payload: TokenPayload): Promise<string> {
+    const secret =
+      this.configService.get<string>('ACCESS_TOKEN_SECRET') ??
+      this.configService.get<string>('JWT_ACCESS_SECRET');
     const accessToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.get<string>('ACCESS_TOKEN_SECRET'),
+      secret,
       expiresIn: '10m',
     });
     return accessToken;
   }
 
+  /** Verify access token (throws if invalid/expired). */
+  async verifyAccessToken(token: string): Promise<{ sub: string; email: string }> {
+    const secret =
+      this.configService.get<string>('ACCESS_TOKEN_SECRET') ??
+      this.configService.get<string>('JWT_ACCESS_SECRET');
+    const payload = await this.jwtService.verifyAsync(token, { secret });
+    return { sub: String(payload.sub), email: payload.email };
+  }
+
   async generateRefreshToken(payload: TokenPayload): Promise<string> {
+    const secret =
+      this.configService.get<string>('REFRESH_TOKEN_SECRET') ??
+      this.configService.get<string>('JWT_REFRESH_SECRET');
     const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.get<string>('REFRESH_TOKEN_SECRET'),
+      secret,
       expiresIn: '7d',
     });
     return refreshToken;
+  }
+
+  /** Verify refresh token and return payload (throws if invalid/expired). */
+  async verifyRefreshToken(token: string): Promise<{ sub: number; email: string }> {
+    const secret =
+      this.configService.get<string>('REFRESH_TOKEN_SECRET') ??
+      this.configService.get<string>('JWT_REFRESH_SECRET');
+    return this.jwtService.verifyAsync(token, { secret });
   }
 }
