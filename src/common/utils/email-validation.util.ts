@@ -43,7 +43,9 @@ export interface EmailValidationResult {
 }
 
 /** Validate email before signup: not disposable + MX if enabled (production only by default) */
-export async function validateRealEmail(email: string): Promise<EmailValidationResult> {
+export async function validateRealEmail(
+  email: string,
+): Promise<EmailValidationResult> {
   const domain = getDomain(email);
   if (!domain) {
     return { valid: false, reason: 'Invalid email format' };
@@ -51,19 +53,21 @@ export async function validateRealEmail(email: string): Promise<EmailValidationR
   if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) {
     return {
       valid: false,
-      reason: 'Temporary or disposable email addresses are not allowed. Please use a real email.',
+      reason:
+        'Temporary or disposable email addresses are not allowed. Please use a real email.',
     };
   }
-  
+
   if (shouldValidateMx()) {
     const hasMx = await domainHasMx(domain);
     if (!hasMx) {
       return {
         valid: false,
-        reason: 'This email domain does not accept mail. Please use a valid email address.',
+        reason:
+          'This email domain does not accept mail. Please use a valid email address.',
       };
     }
   }
-  
+
   return { valid: true };
 }

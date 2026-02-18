@@ -4,7 +4,7 @@ import { AuthRepository } from './auth.repository';
 import { UNVERIFIED_ACCOUNT_DELETE_AFTER_MS } from './auth.constants';
 
 /**
- * Cleaner: runs daily and deletes unverified users older than 2 days.
+ * Cleaner: runs daily and deletes unverified users older than 24 hours.
  */
 @Injectable()
 export class UnverifiedUsersCleaner {
@@ -16,12 +16,11 @@ export class UnverifiedUsersCleaner {
   async handleCleanup() {
     const before = new Date(Date.now() - UNVERIFIED_ACCOUNT_DELETE_AFTER_MS);
     try {
-      const deleted = await this.authRepository.deleteUnverifiedUsersOlderThan(
-        before,
-      );
+      const deleted =
+        await this.authRepository.deleteUnverifiedUsersOlderThan(before);
       if (deleted > 0) {
         this.logger.log(
-          `Unverified users cleaner: deleted ${deleted} account(s) older than 2 days.`,
+          `Unverified users cleaner: deleted ${deleted} account(s) older than 24 hours.`,
         );
       }
     } catch (error) {

@@ -37,7 +37,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async testSendEmail(@Body('email') email: string) {
     if (!email || typeof email !== 'string') {
-      return { ok: false, error: 'Body must contain "email": "your@email.com"' };
+      return {
+        ok: false,
+        error: 'Body must contain "email": "your@email.com"',
+      };
     }
     return this.authService.testSendVerificationEmail(email.trim());
   }
@@ -125,20 +128,32 @@ export class AuthController {
         </body>
         </html>
       `;
-      res.status(status).setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
+      res
+        .status(status)
+        .setHeader('Content-Type', 'text/html; charset=utf-8')
+        .send(html);
     };
 
     const rawEmail = (email ?? '').trim();
     const rawOtp = (otpCode ?? '').trim();
     if (!rawEmail || !rawOtp) {
-      sendErrorHtml('Link is incomplete. Open the link from the email (click the button).', 400);
+      sendErrorHtml(
+        'Link is incomplete. Open the link from the email (click the button).',
+        400,
+      );
       return;
     }
     const normalizedEmail = rawEmail.replace(/\s/g, '+');
 
     try {
-      const result = await this.authService.verifyEmail(normalizedEmail, rawOtp);
-      sendSuccessHtml(result.message ?? 'Your account has been verified. You can sign in now.');
+      const result = await this.authService.verifyEmail(
+        normalizedEmail,
+        rawOtp,
+      );
+      sendSuccessHtml(
+        result.message ??
+          'Your account has been verified. You can sign in now.',
+      );
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'message' in err

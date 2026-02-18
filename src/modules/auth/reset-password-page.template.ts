@@ -10,7 +10,10 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export function getResetPasswordPageHtml(email: string, otpCode: string): string {
+export function getResetPasswordPageHtml(
+  email: string,
+  otpCode: string,
+): string {
   const emailEscaped = escapeHtml(email);
   const otpEscaped = escapeHtml(otpCode);
   const hasParams = Boolean(email && otpCode);

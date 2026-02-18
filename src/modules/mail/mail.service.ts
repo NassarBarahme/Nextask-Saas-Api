@@ -43,17 +43,24 @@ export class MailService {
    * Test sending one verification email. Returns { ok: true } or throws with real SMTP error.
    * Use POST /auth/test-send-email with body { "email": "your@email.com" } to debug.
    */
-  async testSendVerificationEmail(toEmail: string): Promise<{ ok: true; message: string }> {
+  async testSendVerificationEmail(
+    toEmail: string,
+  ): Promise<{ ok: true; message: string }> {
     this.ensureMailConfig();
     const otpCode = '12345678';
     this.logger.log(`[TEST] Sending verification email to ${toEmail}`);
     await this.mailerService.sendMail({
       to: toEmail,
       subject: 'Nextask - تفعيل حسابك (اختبار)',
-      html: getVerificationEmailHtml(`${this.getBaseUrl()}/auth/verify-email?email=${encodeURIComponent(toEmail)}&otpCode=${otpCode}`),
+      html: getVerificationEmailHtml(
+        `${this.getBaseUrl()}/auth/verify-email?email=${encodeURIComponent(toEmail)}&otpCode=${otpCode}`,
+      ),
     });
     this.logger.log(`[TEST] Email sent to ${toEmail}`);
-    return { ok: true, message: `Test email sent to ${toEmail}. Check inbox and spam.` };
+    return {
+      ok: true,
+      message: `Test email sent to ${toEmail}. Check inbox and spam.`,
+    };
   }
 
   /** Send verification email (signup) — always to the email the user registered with. */
@@ -71,7 +78,10 @@ export class MailService {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const stack = err instanceof Error ? err.stack : undefined;
-      this.logger.error(`Failed to send verification email to ${email}: ${msg}`, stack);
+      this.logger.error(
+        `Failed to send verification email to ${email}: ${msg}`,
+        stack,
+      );
       throw new InternalServerErrorException(
         `Failed to send verification email. ${msg}. Check MAIL_USER and MAIL_PASS (use Gmail App Password, no spaces).`,
       );
@@ -92,7 +102,9 @@ export class MailService {
       this.logger.log(`Forgot-password email sent to ${email}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Failed to send forgot-password email to ${email}: ${msg}`);
+      this.logger.error(
+        `Failed to send forgot-password email to ${email}: ${msg}`,
+      );
       throw new InternalServerErrorException(
         `Failed to send email. ${msg}. Check MAIL_USER and MAIL_PASS (use Gmail App Password, no spaces).`,
       );

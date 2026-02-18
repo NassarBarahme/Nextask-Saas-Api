@@ -22,7 +22,9 @@ export class TokenService {
   }
 
   /** Verify access token (throws if invalid/expired). */
-  async verifyAccessToken(token: string): Promise<{ sub: string; email: string }> {
+  async verifyAccessToken(
+    token: string,
+  ): Promise<{ sub: string; email: string }> {
     const secret =
       this.configService.get<string>('ACCESS_TOKEN_SECRET') ??
       this.configService.get<string>('JWT_ACCESS_SECRET');
@@ -42,7 +44,9 @@ export class TokenService {
   }
 
   /** Verify refresh token and return payload (throws if invalid/expired). */
-  async verifyRefreshToken(token: string): Promise<{ sub: number; email: string }> {
+  async verifyRefreshToken(
+    token: string,
+  ): Promise<{ sub: number; email: string }> {
     const secret =
       this.configService.get<string>('REFRESH_TOKEN_SECRET') ??
       this.configService.get<string>('JWT_REFRESH_SECRET');

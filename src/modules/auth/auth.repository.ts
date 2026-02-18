@@ -135,7 +135,11 @@ export class AuthRepository {
     });
   }
 
-  async updateVerificationOtp(userId: string, otpCode: string, otpExpires: Date) {
+  async updateVerificationOtp(
+    userId: string,
+    otpCode: string,
+    otpExpires: Date,
+  ) {
     return this.prisma.user.update({
       where: { id: userId },
       data: { otpCode, otpExpires },
