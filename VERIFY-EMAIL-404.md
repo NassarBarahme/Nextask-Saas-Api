@@ -1,39 +1,44 @@
-# لو ضغط على زر التفعيل في الإيميل وطلع 404 DEPLOYMENT_NOT_FOUND
+# If the verification button in the email opens a 404 / DEPLOYMENT_NOT_FOUND
 
-## السبب
-الرابط اللي **داخل الإيميل** مبني من متغير البيئة على السيرفر. لو فيه `API_PUBLIC_URL` أو `APP_URL` يشيرون لرابط غلط (مثلاً Vercel أو deployment محذوف)، الضغط على الزر يفتح ذلك الرابط فيصير 404.
+## Cause
 
-## التحقق من الرابط المستخدم
-بعد ما تشغّل الـ API (محلي أو على السيرفر)، افتح في المتصفح أو Postman:
+The link inside the email is built from the environment variable used by the server. If `API_PUBLIC_URL` or `APP_URL` points to the wrong address (for example a deleted Vercel deployment or an incorrect host), clicking the button opens that URL and you get a 404.
+
+## Verify the URL being used
+
+After starting the API locally or on the server, open the following in your browser or Postman:
 
 ```
-GET https://عنوان-الـAPI-الحقيقي/auth/verification-base-url
+GET https://your-real-api-host/auth/verification-base-url
 ```
 
-مثال لو الـ API على جهازك:
+Example for a local setup:
+
 ```
 GET http://localhost:3000/auth/verification-base-url
 ```
 
-الرد يكون مثل:
+The response should look like this:
+
 ```json
 { "verificationBaseUrl": "https://...." }
 ```
 
-- لو طلع رابط **Vercel** أو رابط ما يفتح أو يعطي 404 → هذا هو سبب المشكلة.
-- لازم `verificationBaseUrl` يكون **نفس عنوان الـ API** اللي تستخدمه لتسجيل الدخول (نفس الـ host).
+- If the returned URL is a Vercel URL, a broken URL, or something that returns 404, that is the problem.
+- `verificationBaseUrl` must match the same host used by the API that the app uses for sign-in.
 
-## الحل
-1. حدد **أين الـ API شغال فعلاً** (localhost، Railway، Render، VPS، إلخ).
-2. على **نفس البيئة** (نفس الـ .env أو إعدادات الـ deployment)، ضع:
+## Fix
+
+1. Identify where the API is actually running (localhost, Railway, Render, VPS, etc.).
+2. In the same environment (same `.env` file or deployment settings), set:
    ```env
-   API_PUBLIC_URL=https://عنوان-الـAPI-الحقيقي
+   API_PUBLIC_URL=https://your-real-api-host
    ```
-   بدون `/auth` في الآخر — فقط أساس الرابط، مثل:
+   Do not add `/auth` at the end — only the base URL, such as:
    - `http://localhost:3000`
    - `https://your-api.railway.app`
    - `https://api.yourdomain.com`
-3. **لا** تضع رابط الفرونتند (Vercel للتطبيق) هنا — فقط رابط الـ **API** (NestJS).
-4. أعد تشغيل الـ API أو أعد النشر، ثم جرّب تسجيل مستخدم جديد واضغط الزر في الإيميل مرة ثانية.
+3. Do not set the frontend URL here — only the NestJS API URL.
+4. Restart the API or redeploy it, then test again with a new signup and click the email button.
 
-بعد التصحيح، استدعاء `/auth/verification-base-url` يجب يرجع نفس العنوان اللي تفتح منه الـ API وتعمل منه تسجيل الدخول.
+After fixing it, calling `/auth/verification-base-url` should return the same host that your API uses for authentication flows.

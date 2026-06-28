@@ -74,16 +74,17 @@ Example signup request:
 
 **Nextask** is a platform for managing B2B operations between organizations. The current API provides the authentication and identity layer, with a database schema ready for future features:
 
-| Entity | Description |
-|--------|-------------|
-| **User** | System user (email, password, verification status) |
-| **Organization** | Company/org (retail, wholesale, or logistics) |
-| **Membership** | User membership in an organization with a role |
-| **Item** | Organization products (price, stock, barcode) |
-| **Order** | Orders between buyer, seller, and delivery company |
-| **OrderItem** | Order line items |
+| Entity           | Description                                        |
+| ---------------- | -------------------------------------------------- |
+| **User**         | System user (email, password, verification status) |
+| **Organization** | Company/org (retail, wholesale, or logistics)      |
+| **Membership**   | User membership in an organization with a role     |
+| **Item**         | Organization products (price, stock, barcode)      |
+| **Order**        | Orders between buyer, seller, and delivery company |
+| **OrderItem**    | Order line items                                   |
 
 On **first account verification**, the system automatically creates:
+
 - An organization named `{User's Name}'s Org`
 - A membership with the **OWNER** role
 - Links the user to the org as `activeOrganizationId`
@@ -121,20 +122,20 @@ On **first account verification**, the system automatically creates:
 
 ## Tech Stack
 
-| Technology | Purpose |
-|------------|---------|
-| [NestJS 11](https://nestjs.com/) | Backend framework |
-| [TypeScript 5.9](https://www.typescriptlang.org/) | Programming language |
-| [Prisma 7](https://www.prisma.io/) | ORM + Migrations |
-| [PostgreSQL](https://www.postgresql.org/) | Database |
-| [Passport JWT](https://www.passportjs.org/) | Token authentication |
-| [bcrypt](https://www.npmjs.com/package/bcrypt) | Password hashing |
-| [@nestjs-modules/mailer](https://www.npmjs.com/package/@nestjs-modules/mailer) | Email sending (SMTP) |
-| [@nestjs/swagger](https://docs.nestjs.com/openapi/introduction) | API documentation |
-| [@nestjs/throttler](https://docs.nestjs.com/security/rate-limiting) | Rate limiting |
-| [@nestjs/schedule](https://docs.nestjs.com/techniques/task-scheduling) | Cron jobs |
-| [Jest](https://jestjs.io/) | Testing |
-| [Helmet](https://helmetjs.github.io/) | HTTP security headers |
+| Technology                                                                     | Purpose               |
+| ------------------------------------------------------------------------------ | --------------------- |
+| [NestJS 11](https://nestjs.com/)                                               | Backend framework     |
+| [TypeScript 5.9](https://www.typescriptlang.org/)                              | Programming language  |
+| [Prisma 7](https://www.prisma.io/)                                             | ORM + Migrations      |
+| [PostgreSQL](https://www.postgresql.org/)                                      | Database              |
+| [Passport JWT](https://www.passportjs.org/)                                    | Token authentication  |
+| [bcrypt](https://www.npmjs.com/package/bcrypt)                                 | Password hashing      |
+| [@nestjs-modules/mailer](https://www.npmjs.com/package/@nestjs-modules/mailer) | Email sending (SMTP)  |
+| [@nestjs/swagger](https://docs.nestjs.com/openapi/introduction)                | API documentation     |
+| [@nestjs/throttler](https://docs.nestjs.com/security/rate-limiting)            | Rate limiting         |
+| [@nestjs/schedule](https://docs.nestjs.com/techniques/task-scheduling)         | Cron jobs             |
+| [Jest](https://jestjs.io/)                                                     | Testing               |
+| [Helmet](https://helmetjs.github.io/)                                          | HTTP security headers |
 
 ---
 
@@ -160,7 +161,7 @@ Nextask-API-nassar/
 │       └── prisma/            # PrismaService
 ├── test/                      # E2E tests
 ├── env.example                # Environment variable template
-├── PROJECT-GUIDE.md           # Detailed per-file guide (Arabic)
+├── PROJECT-GUIDE.md           # Detailed per-file guide (English)
 ├── MAIL-SETUP.md              # Email setup
 ├── SWAGGER-TESTING.md         # Testing API via Swagger
 ├── TESTING-GUIDE.md           # Unit test writing guide
@@ -248,16 +249,16 @@ PORT=3000
 # SKIP_EMAIL_MX_CHECK=true   # Disable MX check (useful in development)
 ```
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `JWT_ACCESS_SECRET` | Yes | Access Token signing key |
-| `JWT_REFRESH_SECRET` | Yes | Refresh Token signing key |
-| `MAIL_USER` | Yes* | SMTP email (*for signup & password reset) |
-| `MAIL_PASS` | Yes* | SMTP password (Gmail App Password) |
-| `API_PUBLIC_URL` | Yes* | Base URL for email links (*no `/auth` suffix) |
-| `PORT` | No | Server port (default: 3000) |
-| `SKIP_EMAIL_MX_CHECK` | No | Set to `true` to disable MX validation |
+| Variable              | Required | Description                                    |
+| --------------------- | -------- | ---------------------------------------------- |
+| `DATABASE_URL`        | Yes      | PostgreSQL connection string                   |
+| `JWT_ACCESS_SECRET`   | Yes      | Access Token signing key                       |
+| `JWT_REFRESH_SECRET`  | Yes      | Refresh Token signing key                      |
+| `MAIL_USER`           | Yes\*    | SMTP email (\*for signup & password reset)     |
+| `MAIL_PASS`           | Yes\*    | SMTP password (Gmail App Password)             |
+| `API_PUBLIC_URL`      | Yes\*    | Base URL for email links (\*no `/auth` suffix) |
+| `PORT`                | No       | Server port (default: 3000)                    |
+| `SKIP_EMAIL_MX_CHECK` | No       | Set to `true` to disable MX validation         |
 
 > **Gmail:** Use an [App Password](https://myaccount.google.com/apppasswords), not your regular account password. See `MAIL-SETUP.md`.
 
@@ -279,11 +280,11 @@ User ──────< Membership >────── Organization
 
 ### Enums
 
-| Enum | Values |
-|------|--------|
-| `OrgType` | `RETAIL`, `WHOLESALE`, `LOGISTICS` |
-| `Role` | `OWNER`, `ADMIN`, `MANAGER`, `MEMBER` |
-| `OrderStatus` | `PENDING` → `DELIVERED` / `CANCELLED` |
+| Enum            | Values                                  |
+| --------------- | --------------------------------------- |
+| `OrgType`       | `RETAIL`, `WHOLESALE`, `LOGISTICS`      |
+| `Role`          | `OWNER`, `ADMIN`, `MANAGER`, `MEMBER`   |
+| `OrderStatus`   | `PENDING` → `DELIVERED` / `CANCELLED`   |
 | `PaymentStatus` | `UNPAID`, `PARTIAL`, `PAID`, `REFUNDED` |
 
 ### Useful Prisma Commands
