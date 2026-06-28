@@ -1,8 +1,48 @@
-# Nextask API
+﻿# Nextask API
 
 > **Backend API** for **Nextask** — a B2B business management platform that unifies retail, wholesale, and logistics in one system.
 
 Built with **NestJS 11** + **TypeScript** + **PostgreSQL** + **Prisma 7**, featuring a complete authentication system (signup, email verification, JWT, password recovery) and interactive documentation via **Swagger**.
+
+## Quick Start
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Create your environment file:
+   ```bash
+   copy env.example .env
+   ```
+3. Set your database and email values inside `.env`.
+4. Run Prisma and start the server:
+   ```bash
+   npx prisma generate
+   npx prisma migrate deploy
+   npm run start:dev
+   ```
+5. Open Swagger at:
+   ```text
+   http://localhost:3000/api
+   ```
+
+## Swagger & Testing Flow
+
+- Use `POST /auth/signup` to create a new account.
+- Open the verification link from the email to activate the account.
+- Use `POST /auth/signin` to receive tokens.
+- Use `POST /auth/refresh` and `POST /auth/logout` for token management.
+- Use `POST /auth/forgot-password` and `POST /auth/reset-password` for recovery flow.
+
+Example signup request:
+
+```json
+{
+  "name": "John",
+  "email": "user@example.com",
+  "password": "Password123"
+}
+```
 
 ---
 
@@ -259,387 +299,107 @@ npx prisma studio            # Visual database browser
 
 ## Running the Project
 
-| Command | Description |
-|---------|-------------|
-| `npm run start` | Standard start |
-| `npm run start:dev` | Start with hot reload |
-| `npm run start:debug` | Start with debugger |
-| `npm run start:prod` | Run from `dist/` (after `npm run build`) |
-| `npm run build` | Build for production |
-| `npm run lint` | Run ESLint |
-| `npm run format` | Format code with Prettier |
+### Development mode
+
+```bash
+npm run start:dev
+```
+
+### Production build
+
+```bash
+npm run build
+npm run start:prod
+```
 
 ---
 
 ## API Endpoints
 
-Base URL: `http://localhost:3000`
+### Auth endpoints
 
-### Auth — Public routes (no JWT required)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/auth/signup` | Register a new user |
-| `POST` | `/auth/signin` | Sign in |
-| `POST` | `/auth/refresh` | Refresh tokens |
-| `POST` | `/auth/logout` | Log out |
-| `POST` | `/auth/resend-verification` | Resend verification email |
-| `POST` | `/auth/forgot-password` | Request password reset OTP |
-| `POST` | `/auth/reset-password` | Set a new password |
-| `GET` | `/auth/verify-email` | Verify account (email link → HTML page) |
-| `GET` | `/auth/reset-password` | HTML page for password reset |
-| `GET` | `/auth/verification-base-url` | Check the URL used in email links |
-| `POST` | `/auth/test-send-email` | Test email sending (development) |
-
-### Request Examples
-
-#### Sign up
-
-```http
-POST /auth/signup
-Content-Type: application/json
-
-{
-  "name": "John",
-  "email": "john@example.com",
-  "password": "Password123"
-}
-```
-
-**Password requirements:** minimum 6 characters + at least one uppercase letter (A-Z).
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "message": "Please check your email to verify your account."
-  }
-}
-```
-
-#### Sign in
-
-```http
-POST /auth/signin
-Content-Type: application/json
-
-{
-  "email": "john@example.com",
-  "password": "Password123"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIs...",
-    "user": {
-      "id": "uuid",
-      "name": "John",
-      "email": "john@example.com",
-      "role": "OWNER",
-      "orgId": "org-uuid"
-    }
-  }
-}
-```
-
-#### Refresh tokens
-
-```http
-POST /auth/refresh
-Content-Type: application/json
-
-{
-  "refreshToken": "eyJhbGciOiJIUzI1NiIs..."
-}
-```
-
-#### Log out
-
-```http
-POST /auth/logout
-Content-Type: application/json
-
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiIs..."
-}
-```
-
-#### Forgot password
-
-```http
-POST /auth/forgot-password
-Content-Type: application/json
-
-{
-  "email": "john@example.com"
-}
-```
-
-#### Reset password
-
-```http
-POST /auth/reset-password
-Content-Type: application/json
-
-{
-  "email": "john@example.com",
-  "otpCode": "12345678",
-  "newPassword": "NewPassword123"
-}
-```
+- `POST /auth/signup`
+- `POST /auth/signin`
+- `POST /auth/refresh`
+- `POST /auth/logout`
+- `POST /auth/resend-verification`
+- `POST /auth/forgot-password`
+- `POST /auth/reset-password`
+- `GET /auth/verify-email`
+- `GET /auth/verification-base-url`
 
 ---
 
 ## Authentication Flow
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant API as Nextask API
-    participant DB as PostgreSQL
-    participant Mail as SMTP
-
-    U->>API: POST /auth/signup
-    API->>API: validateRealEmail()
-    API->>DB: createUnverifiedUser()
-    API->>Mail: sendVerificationEmail()
-    API-->>U: "Check your email"
-
-    U->>API: GET /auth/verify-email?email&otpCode
-    API->>DB: createOrganizationAndMembership()
-    API-->>U: HTML success page
-
-    U->>API: POST /auth/signin
-    API->>DB: verify password
-    API->>API: generate JWT tokens
-    API-->>U: accessToken + refreshToken + user
-
-    U->>API: POST /auth/refresh
-    API->>API: verify refresh token
-    API-->>U: new tokens
-
-    U->>API: POST /auth/logout
-    API->>DB: clear refreshToken
-    API-->>U: "Logged out"
-```
-
-### OTP Expiry
-
-| Type | Duration |
-|------|----------|
-| Email verification | 15 minutes |
-| Password reset | 10 minutes |
-| Unverified account deletion | 24 hours |
-
-### Token Expiry
-
-| Token | Default Duration |
-|-------|------------------|
-| Access Token | 10 minutes |
-| Refresh Token | 7 days |
+1. User signs up.
+2. User verifies email with OTP.
+3. User signs in and receives access/refresh tokens.
+4. Access token is used for protected routes.
+5. Refresh token can be used to obtain new tokens.
 
 ---
 
 ## Response Format
 
-### Success (most routes)
+Successful responses are wrapped in:
 
 ```json
 {
   "success": true,
-  "data": { ... }
+  "data": {}
 }
 ```
-
-### Error (HttpException)
-
-```json
-{
-  "statusCode": 400,
-  "timestamp": "2026-06-26T12:00:00.000Z",
-  "path": "/auth/signup",
-  "message": "Email already registered"
-}
-```
-
-### Common HTTP Status Codes
-
-| Code | Meaning |
-|------|---------|
-| `200` | Success |
-| `201` | Created (signup) |
-| `400` | Bad request / invalid data |
-| `401` | Unauthorized (wrong credentials / OTP) |
-| `403` | Forbidden (invalid token / no membership) |
-| `429` | Too many requests (rate limit) |
-| `500` | Server error (e.g. email send failure) |
 
 ---
 
 ## Swagger
 
-After starting the server, open:
+Swagger UI is available at:
 
-```
+```text
 http://localhost:3000/api
 ```
-
-- Try any endpoint directly from the browser
-- Use **Authorize** to enter tokens
-- See `SWAGGER-TESTING.md` for detailed steps
 
 ---
 
 ## Testing
 
-```bash
-# Unit tests
-npm test
-
-# Watch mode
-npm run test:watch
-
-# Coverage report
-npm run test:cov
-
-# E2E tests
-npm run test:e2e
-```
-
-Current tests cover `AuthService` (signup, signin, verify, refresh, logout, forgot/reset password).
-
-See `TESTING-GUIDE.md` for writing new tests.
+See [SWAGGER-TESTING.md](SWAGGER-TESTING.md) for a step-by-step testing guide.
 
 ---
 
 ## Security
 
-| Mechanism | Details |
-|-----------|---------|
-| **JWT** | Separate Access + Refresh keys |
-| **bcrypt** | Password hashing (cost: 10) |
-| **Refresh Token** | Stored hashed in DB |
-| **Helmet** | Secure HTTP headers |
-| **Rate Limiting** | 10 requests / 60 seconds |
-| **ValidationPipe** | whitelist + forbidNonWhitelisted |
-| **Email Validation** | Rejects disposable emails + MX check (in production) |
-| **OTP** | Random 8-digit code with expiry |
-
-### Protected Routes
-
-`AccessTokenGuard` is applied to **all** routes by default. Public routes are marked with `@Public()`.
+- JWT-based authentication
+- Rate limiting
+- Helmet security headers
 
 ---
 
 ## Scheduled Tasks
 
-| Task | Schedule | Description |
-|------|----------|-------------|
-| `UnverifiedUsersCleaner` | Daily at 3:00 AM | Deletes `isVerified: false` accounts older than 24 hours |
+The app includes scheduled cleanup for unverified users.
 
 ---
 
 ## Deployment
 
-### General Steps
-
-1. Set environment variables on the server (`DATABASE_URL`, `JWT_*`, `MAIL_*`, `API_PUBLIC_URL`)
-2. Run migrations:
-   ```bash
-   npx prisma migrate deploy
-   ```
-3. Build the project:
-   ```bash
-   npm run build
-   ```
-4. Start:
-   ```bash
-   npm run start:prod
-   ```
-
-### Important Notes
-
-- `API_PUBLIC_URL` **must** point to the deployed API URL (not the frontend)
-- Verify with: `GET /auth/verification-base-url`
-- Use HTTPS in production
-- Use strong random values for `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`
-
-### Suggested Platforms
-
-Railway, Render, Fly.io, AWS, DigitalOcean, VPS
+Deploy using any Node.js-compatible host and set your environment variables.
 
 ---
 
 ## Troubleshooting
 
-### Email not received
-
-1. Confirm `MAIL_USER` and `MAIL_PASS` in `.env`
-2. Gmail: use an App Password
-3. Try: `POST /auth/test-send-email` with `{ "email": "your@email.com" }`
-4. Check your spam folder
-5. See `MAIL-SETUP.md`
-
-### Verification link returns 404
-
-**Cause:** `API_PUBLIC_URL` points to the wrong URL (e.g. a frontend Vercel deployment).
-
-**Fix:**
-```bash
-GET /auth/verification-base-url
-```
-Make sure `verificationBaseUrl` matches your actual API URL.
-
-See `VERIFY-EMAIL-404.md`.
-
-### "Account not verified" on sign in
-
-Open the verification link from your email, or use:
-```http
-POST /auth/resend-verification
-{ "email": "your@email.com" }
-```
-
-### "Mail not configured"
-
-Add `MAIL_USER` and `MAIL_PASS` to `.env` and restart the server.
-
-### Database connection failure
-
-- Check `DATABASE_URL`
-- Ensure PostgreSQL is running
-- Run `npx prisma migrate deploy`
-
-### Rate Limit (429)
-
-Limit is 10 requests per minute. Wait a minute or adjust the setting in `app.module.ts`.
+- If your verification link returns 404, ensure `API_PUBLIC_URL` points to the API server.
+- If port `3000` is busy, change `PORT` in `.env`.
+- If email sending fails, verify your SMTP credentials.
 
 ---
 
 ## Additional Docs
 
-| File | Content |
-|------|---------|
-| [PROJECT-GUIDE.md](./PROJECT-GUIDE.md) | Detailed per-file and request flow guide |
-| [MAIL-SETUP.md](./MAIL-SETUP.md) | Gmail SMTP setup |
-| [SWAGGER-TESTING.md](./SWAGGER-TESTING.md) | Testing API via Swagger |
-| [TESTING-GUIDE.md](./TESTING-GUIDE.md) | Writing unit tests |
-| [VERIFY-EMAIL-404.md](./VERIFY-EMAIL-404.md) | Fixing verify-email 404 issues |
-
----
-
-## License
-
-UNLICENSED — private project.
-
----
-
-## Contributing
-
-The project is under active development. The Auth module is complete; Items and Orders modules are planned (schema is ready).
+- [PROJECT-GUIDE.md](PROJECT-GUIDE.md)
+- [MAIL-SETUP.md](MAIL-SETUP.md)
+- [TESTING-GUIDE.md](TESTING-GUIDE.md)
+- [VERIFY-EMAIL-404.md](VERIFY-EMAIL-404.md)

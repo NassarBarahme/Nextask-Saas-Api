@@ -1,53 +1,136 @@
-# How to test the API with Swagger
+# Swagger Testing Guide
+
+This guide gives you a complete flow to test the API through Swagger and Postman.
 
 ## 1. Start the server
 
-```bash
+```powershell
+cd c:\Users\HP\Downloads\Nextask-API-nassar\Nextask-API-nassar
 npm run start:dev
 ```
 
-## 2. Open Swagger in the browser
+## 2. Open Swagger
 
-Go to: **http://localhost:3000/api**
+Open:
 
-(Use your actual port if you set `PORT` in `.env`.)
+```text
+http://localhost:3000/api
+```
 
-## 3. Test an endpoint
+If you changed the port in `.env`, use that port instead.
 
-1. Find the endpoint (e.g. **POST /auth/signup**).
-2. Click on it to expand.
-3. Click **"Try it out"**.
-4. Edit the **Request body** (Swagger shows the fields and example values).
-5. Click **"Execute"**.
-6. Check **Response body** and **Response code** (200 = success).
+## 3. Recommended test flow
 
-## Example: Sign up then sign in
+### A. Sign up
 
-1. **POST /auth/signup**  
-   - Try it out → set `name`, `email`, `password` (e.g. `"John"`, `"test@example.com"`, `"Password123"`).  
-   - Execute. You should get **201** and a message like "Please check your email to verify your account."
+Use `POST /auth/signup` with:
 
-2. **GET /auth/verify-email**  
-   - Either open the link from the email, or in Swagger set query params `email` and `otpCode` (from the email link) and Execute.  
-   - Then the account is verified.
+```json
+{
+  "name": "John",
+  "email": "test@example.com",
+  "password": "Password123"
+}
+```
 
-3. **POST /auth/signin**  
-   - Try it out → same `email` and `password`.  
-   - Execute. You should get **200** with `accessToken`, `refreshToken`, and `user`.
+Expected result:
 
-4. **Protected routes (refresh, logout)**  
-   - Click **"Authorize"** at the top of the Swagger page.  
-   - For **refresh**: use **refresh-token** and paste the `refreshToken` from signin (with `Bearer ` prefix or as Swagger asks).  
-   - For **logout**: use **access-token** and paste the `accessToken`.  
-   - Then call the endpoint and Execute.
+- Status `201`
+- Message: `Please check your email to verify your account.`
 
-## Summary
+### B. Verify account
 
-| Step | Where | What to do |
-|------|--------|------------|
-| Open docs | http://localhost:3000/api | Use this URL when the server is running |
-| Fill data | Request body in Swagger | Use the example values or your own |
-| Run request | "Execute" button | Check response code and body |
-| Auth | "Authorize" (top) | Paste token for refresh / logout |
+Open the verification link from the email or call:
 
-If the response code is 200 or 201 and the body looks correct, the test passed.
+```text
+GET /auth/verify-email?email=test@example.com&otpCode=YOUR_OTP
+```
+
+### C. Sign in
+
+Use `POST /auth/signin` with:
+
+```json
+{
+  "email": "test@example.com",
+  "password": "Password123"
+}
+```
+
+Expected result:
+
+- Status `200`
+- Contains `accessToken` and `refreshToken`
+
+### D. Refresh token
+
+Use `POST /auth/refresh` with:
+
+```json
+{
+  "refreshToken": "PASTE_REFRESH_TOKEN_HERE"
+}
+```
+
+### E. Logout
+
+Use `POST /auth/logout` with:
+
+```json
+{
+  "accessToken": "PASTE_ACCESS_TOKEN_HERE"
+}
+```
+
+### F. Forgot password
+
+Use `POST /auth/forgot-password` with:
+
+```json
+{
+  "email": "test@example.com"
+}
+```
+
+### G. Reset password
+
+Use `POST /auth/reset-password` with:
+
+```json
+{
+  "email": "test@example.com",
+  "otpCode": "12345678",
+  "newPassword": "NewPassword123"
+}
+```
+
+## 4. Swagger tips
+
+- Click `Try it out` for any endpoint.
+- Fill the JSON body or query params.
+- Click `Execute` and inspect the response.
+- For refresh/logout, use the `Authorize` button if required by your setup.
+
+## 5. Postman version
+
+Base URL:
+
+```text
+http://localhost:3000
+```
+
+Example requests:
+
+- `POST /auth/signup`
+- `POST /auth/signin`
+- `POST /auth/refresh`
+- `POST /auth/logout`
+- `POST /auth/forgot-password`
+- `POST /auth/reset-password`
+
+## 6. Common issues
+
+- `500` or SMTP errors: check your email credentials in `.env`
+- `404` on verification link: check `API_PUBLIC_URL`
+- `401` on sign in: make sure the account is verified
+- `EADDRINUSE`: another process is using port `3000`
